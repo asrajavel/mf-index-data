@@ -16,7 +16,7 @@ class NiftyIndexFetcher:
     def __init__(self):
         self.session = requests.Session()
         self.base_url = "https://www.niftyindices.com"
-        self.api_url = f"{self.base_url}/Backpage.aspx/getHistoricaldatatabletoString"
+        self.api_url = f"{self.base_url}/Backpage.aspx/getTotalReturnIndexString"
         self.setup_session()
         
     def setup_session(self):
@@ -43,7 +43,7 @@ class NiftyIndexFetcher:
         try:
             print("Getting fresh cookies...")
             # Visit the main historical data page to get session cookies
-            response = self.session.get(f'{self.base_url}/reports/historical-data', timeout=10)
+            response = self.session.get(f'{self.base_url}/reports/historical-data')
             if response.status_code == 200:
                 print("✓ Fresh cookies obtained successfully")
                 return True
@@ -71,7 +71,7 @@ class NiftyIndexFetcher:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = self.session.post(self.api_url, json=payload, timeout=10)
+                response = self.session.post(self.api_url, json=payload)
                 
                 if response.status_code == 200:
                     data = response.json()
