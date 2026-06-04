@@ -110,6 +110,18 @@ class NiftyIndexFetcher:
         output_dir.mkdir(parents=True, exist_ok=True)
         filepath = output_dir / f"{index_name.replace('/', '-')}.json"
 
+        # Strip per-row RequestNumber (changes every API call, not meaningful data)
+        d = data.get('d')
+        if d and d != '[]' and isinstance(d, str):
+            try:
+                records = json.loads(d)
+                if isinstance(records, list):
+                    for r in records:
+                        r.pop('RequestNumber', None)
+                    data = {**data, 'd': json.dumps(records)}
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         new_count = _count_records(data)
         old_count = _count_records(json.loads(filepath.read_text(encoding='utf-8'))) if filepath.exists() else 0
 
