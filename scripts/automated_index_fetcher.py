@@ -1,69 +1,42 @@
 #!/usr/bin/env python3
 """
 Automated Nifty Index Data Fetcher
-Uses curl subprocess for reliable TLS handling with Akamai CDN.
+Uses curl_cffi for Chrome TLS fingerprint impersonation to bypass Akamai CDN.
 """
 
 import json
-import subprocess
 import time
 from datetime import datetime
 import os
 from pathlib import Path
+from curl_cffi import requests as cffi_requests
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+}
 
 class NiftyIndexFetcher:
     def __init__(self):
         self.base_url = "https://www.niftyindices.com"
         self.api_url = f"{self.base_url}/Backpage.aspx/getTotalReturnIndexString"
-        self.cookie_file = "/tmp/nifty_cookies.txt"
-
-    def _curl(self, url, method="GET", data=None, timeout=30):
-        """Execute a curl request and return (status_code, body)"""
-        cmd = [
-            "curl", "-s",
-            "--connect-timeout", "10",
-            "--max-time", str(timeout),
-            "-b", self.cookie_file,
-            "-c", self.cookie_file,
-            "-H", "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-            "-H", "Accept-Language: en-GB,en-US;q=0.9,en;q=0.8",
-            "-w", "\n__HTTP_STATUS__%{http_code}",
-        ]
-
-        if method == "POST" and data is not None:
-            cmd += [
-                "-X", "POST",
-                "-H", "Accept: application/json, text/javascript, */*; q=0.01",
-                "-H", "Content-Type: application/json; charset=UTF-8",
-                "-H", "X-Requested-With: XMLHttpRequest",
-                "-H", f"Origin: {self.base_url}",
-                "-H", f"Referer: {self.base_url}/reports/historical-data",
-                "-d", json.dumps(data),
-            ]
-        else:
-            cmd += ["-H", "Accept: text/html,application/xhtml+xml"]
-
-        cmd.append(url)
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5)
-        output = result.stdout
-        parts = output.rsplit("\n__HTTP_STATUS__", 1)
-        body = parts[0] if len(parts) == 2 else output
-        status = int(parts[1]) if len(parts) == 2 else 0
-        return status, body
+        self.session = cffi_requests.Session(impersonate="chrome")
 
     def get_fresh_cookies(self):
         """Get fresh cookies by visiting the main page"""
         try:
             print("Getting fresh cookies...")
-            if os.path.exists(self.cookie_file):
-                os.remove(self.cookie_file)
-            status, _ = self._curl(f'{self.base_url}/reports/historical-data')
-            if status == 200:
+            self.session = cffi_requests.Session(impersonate="chrome")
+            resp = self.session.get(
+                f"{self.base_url}/reports/historical-data",
+                headers=HEADERS,
+                timeout=30,
+            )
+            if resp.status_code == 200:
                 print("✓ Fresh cookies obtained successfully")
                 return True
             else:
-                print(f"✗ Failed to get fresh cookies: HTTP {status}")
+                print(f"✗ Failed to get fresh cookies: HTTP {resp.status_code}")
                 return False
         except Exception as e:
             print(f"✗ Error getting fresh cookies: {e}")
@@ -83,23 +56,37 @@ class NiftyIndexFetcher:
             })
         }
 
+        post_headers = {
+            **HEADERS,
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": self.base_url,
+            "Referer": f"{self.base_url}/reports/historical-data",
+        }
+
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                status, body = self._curl(self.api_url, method="POST", data=payload, timeout=60)
+                resp = self.session.post(
+                    self.api_url,
+                    headers=post_headers,
+                    json=payload,
+                    timeout=60,
+                )
 
-                if status == 200:
-                    data = json.loads(body)
+                if resp.status_code == 200:
+                    data = resp.json()
                     if data.get('d') and data['d'] != '[]':
                         return data
                     else:
                         print(f"  Empty data received for {index_name}, attempt {attempt + 1}")
 
-                elif status == 500:
+                elif resp.status_code == 500:
                     print(f"  Server error for {index_name}, attempt {attempt + 1}")
 
                 else:
-                    print(f"  HTTP {status} for {index_name}, attempt {attempt + 1}")
+                    print(f"  HTTP {resp.status_code} for {index_name}, attempt {attempt + 1}")
 
                 if attempt < max_retries - 1:
                     print("  Refreshing cookies and retrying...")
@@ -204,14 +191,11 @@ class NiftyIndexFetcher:
         print(f"\n{title}")
         print("=" * 50)
 
-        sorted_changes = sorted(change_tracking.keys(), key=lambda x: (-x if x > 0 else (0 if x == 0 else 1000 + abs(x))))
-
         increases = {}
         no_changes = {}
         decreases = {}
 
-        for change in sorted_changes:
-            indices = change_tracking[change]
+        for change, indices in change_tracking.items():
             if change > 0:
                 increases[change] = indices
             elif change == 0:
@@ -279,7 +263,6 @@ class NiftyIndexFetcher:
                 print(f"[{i+1}/{len(index_list)}] Fetching: {index_name}")
 
                 trading_name = index_mapping.get(index_name.upper(), index_name)
-
                 data = self.fetch_index_data(trading_name)
 
                 if data:
@@ -310,7 +293,6 @@ class NiftyIndexFetcher:
         self.display_change_summary(change_tracking, failed_indices, interrupted=(successful + failed < len(index_list)))
 
 def main():
-    """Main function"""
     print("🚀 Starting Automated Nifty Index Data Fetcher")
     print("=" * 50)
 
