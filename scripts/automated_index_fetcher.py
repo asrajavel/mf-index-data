@@ -107,6 +107,7 @@ class NiftyIndexFetcher:
         """Save index data to JSON file with count comparison"""
         if output_dir is None:
             output_dir = REPO_ROOT / "index data"
+        try:
             Path(output_dir).mkdir(parents=True, exist_ok=True)
 
             filename = index_name.replace('/', '-')
