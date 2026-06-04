@@ -6,6 +6,7 @@ Uses curl_cffi for Chrome TLS fingerprint impersonation to bypass Akamai CDN.
 
 import json
 import time
+import concurrent.futures
 from datetime import datetime
 import os
 from pathlib import Path
@@ -71,12 +72,22 @@ class NiftyIndexFetcher:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                resp = self.session.post(
-                    self.api_url,
-                    headers=post_headers,
-                    json=payload,
-                    timeout=60,
-                )
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        self.session.post,
+                        self.api_url,
+                        headers=post_headers,
+                        json=payload,
+                        timeout=45,
+                    )
+                    try:
+                        resp = future.result(timeout=50)
+                    except concurrent.futures.TimeoutError:
+                        print(f"  Hard timeout hit for {index_name}, attempt {attempt + 1}")
+                        if attempt < max_retries - 1:
+                            self.get_fresh_cookies()
+                            time.sleep(2)
+                        continue
 
                 if resp.status_code == 200:
                     data = resp.json()
