@@ -11,6 +11,9 @@ import os
 from pathlib import Path
 from curl_cffi import requests as cffi_requests
 
+SCRIPT_DIR = Path(__file__).parent
+REPO_ROOT = SCRIPT_DIR.parent
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
     "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
@@ -100,9 +103,10 @@ class NiftyIndexFetcher:
 
         return None
 
-    def save_index_data(self, index_name, data, output_dir="../index data"):
+    def save_index_data(self, index_name, data, output_dir=None):
         """Save index data to JSON file with count comparison"""
-        try:
+        if output_dir is None:
+            output_dir = REPO_ROOT / "index data"
             Path(output_dir).mkdir(parents=True, exist_ok=True)
 
             filename = index_name.replace('/', '-')
@@ -162,8 +166,10 @@ class NiftyIndexFetcher:
             print(f"  ✗ Error saving data for {index_name}: {e}")
             return {'success': False}
 
-    def load_index_list(self, filename="../index list.json"):
+    def load_index_list(self, filename=None):
         """Load the list of indices to fetch"""
+        if filename is None:
+            filename = REPO_ROOT / "index list.json"
         try:
             with open(filename, 'r', encoding='utf-8-sig') as f:
                 data = json.load(f)
@@ -172,8 +178,10 @@ class NiftyIndexFetcher:
             print(f"Error loading index list: {e}")
             return []
 
-    def load_index_mapping(self, filename="../index mapping.json"):
+    def load_index_mapping(self, filename=None):
         """Load index name mapping"""
+        if filename is None:
+            filename = REPO_ROOT / "index mapping.json"
         try:
             with open(filename, 'r', encoding='utf-8-sig') as f:
                 data = json.load(f)
