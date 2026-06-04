@@ -2,7 +2,7 @@ name: Update Index Data
 
 on:
   schedule:
-    - cron: '30 10 * * 1-5'  # 4pm IST, weekdays (after NSE closes at 3:30pm)
+    - cron: '30 10 * * 1'  # 4pm IST, Mondays (after NSE closes at 3:30pm)
   workflow_dispatch:           # manual trigger from GitHub UI
 
 permissions:
