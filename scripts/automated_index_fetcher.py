@@ -5,6 +5,7 @@ Uses curl_cffi for Chrome TLS fingerprint impersonation to bypass Akamai CDN.
 """
 
 import json
+import sys
 import time
 import concurrent.futures
 from collections import defaultdict
@@ -14,7 +15,7 @@ from curl_cffi import requests as cffi_requests
 
 REPO_ROOT = Path(__file__).parent.parent
 BASE_URL = "https://www.niftyindices.com"
-API_URL = f"{BASE_URL}/Backpage.aspx/getTotalReturnIndexString"
+API_URL = f"{BASE_URL}/BackPage/getTotalReturnIndexString"
 
 GET_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
@@ -89,7 +90,9 @@ class NiftyIndexFetcher:
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    if data.get('d') and data['d'] != '[]':
+                    if isinstance(data, list) and data:
+                        return {"d": json.dumps(data)}
+                    if isinstance(data, dict) and data.get('d') and data['d'] != '[]':
                         return data
                     print(f"  Empty data for {index_name}, attempt {attempt + 1}")
                 else:
@@ -176,7 +179,7 @@ class NiftyIndexFetcher:
     def fetch_all_indices(self):
         if not self._refresh_session():
             print("Failed to get initial cookies. Exiting.")
-            return
+            return 0, 0
 
         index_list = self.load_index_list()
         index_mapping = self.load_index_mapping()
@@ -221,13 +224,16 @@ class NiftyIndexFetcher:
         print("-" * 50)
         print(f"Basic Summary: {successful} successful, {len(failed_indices)} failed")
         self.display_summary(change_tracking, failed_indices, interrupted=(processed < len(index_list)))
+        return successful, len(failed_indices)
 
 
 def main():
     print("🚀 Starting Automated Nifty Index Data Fetcher")
     print("=" * 50)
-    NiftyIndexFetcher().fetch_all_indices()
+    successful, failed = NiftyIndexFetcher().fetch_all_indices()
     print("✅ Completed!")
+    if successful == 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
